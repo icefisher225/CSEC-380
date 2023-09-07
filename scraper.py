@@ -142,7 +142,6 @@ def main():
         [urls.append(_) for _ in parsed if _ not in urls and _.url.startswith(domain)]
         curdepth += 1
         print(f"Time elapsed: {time.time() - curtime}\nDepth: {curdepth}")
-
     for item in urls:
         print(item.url, item.depth)
 
