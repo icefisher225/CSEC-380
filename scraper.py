@@ -1,9 +1,12 @@
-import math, time, argparse, requests, re, typing
-from os import link
-from operator import is_
+"""
+Ryan Cheevers-Brown
+CSEC-380 Assignment 1 - Web Scraper
+Written with a small amount of help from GitHub CoPilot. ~97% of code is human-generated. 
+"""
+
+import time, argparse, requests, re
 from dataclasses import dataclass
 from bs4 import BeautifulSoup as bs
-import multiprocessing as mp
 from threading import Thread
 
 
@@ -34,42 +37,6 @@ def get_args():
     return parser.parse_args()
 
 
-def start_scraping(links, domain, maxdepth):
-    mp.set_start_method("spawn")
-    procs = []
-    # Queue of links to scrape...
-    toScrape = mp.Queue()
-
-    # Queue of links returned
-    retQueue = mp.Queue()
-
-    for i in range(10):
-        p = mp.Process(
-            target=scrape_link,
-            args=(
-                toScrape,
-                retQueue,
-            ),
-        )
-        p.start()
-        procs.append(p)
-
-    while True:  # TODO: Condition????
-        newLink = retQueue.get()
-        if newLink not in links:
-            if newLink.depth < maxdepth and newLink.url.startswith(domain):
-                links.append(newLink)
-                toScrape.put(newLink)
-        if retQueue.is_empty():
-            if toScrape.is_empty():
-                break
-
-    for p in procs:
-        p.terminate()
-
-    print(links)
-
-
 def scrape_link(link, lst):
     foo = [_ for _ in parse(requests.get(link.url), link.depth)]
     for _ in foo:
@@ -96,7 +63,7 @@ def main():
     url = Link(args.url, 0)
     maxdepth = args.depth
 
-    print(f"Domain: {domain}\nStarting URL: {url.url}\nMax Depth: {maxdepth}")
+    # print(f"Domain: {domain}\nStarting URL: {url.url}\nMax Depth: {maxdepth}")
 
     # Begin at url, scrape for all links/resources in HTML, CSS, and JS. Record all links/resources found under the domain.
     # Multithread the scraping process to speed up the process.
@@ -107,10 +74,6 @@ def main():
     urls = []
     urls.append(url)
 
-    # parsed = parse(requests.get(url.url), url.depth)
-
-    # [urls.append(_) for _ in parsed if _ not in urls and _.url.startswith(domain)]
-
     # At this point, urls contains all links with depth 0 and have been deduplicated
     # Now we need an iterative or recursive solution to parse the rest
 
@@ -120,9 +83,6 @@ def main():
     while curdepth < maxdepth:
         threads = []
         for link in urls:
-            # print(
-            #    f"current depth: {curdepth}, link depth: {link.depth}, link: {link.url}"
-            # )
             if link.depth == curdepth:
                 t = Thread(
                     target=scrape_link,
@@ -141,19 +101,12 @@ def main():
             t.join()
         [urls.append(_) for _ in parsed if _ not in urls and _.url.startswith(domain)]
         curdepth += 1
-        print(f"Time elapsed: {time.time() - curtime}\nDepth: {curdepth}")
-    for item in urls:
-        print(item.url, item.depth)
+        print(f"Time elapsed {time.time() - curtime} for depth {curdepth}")
+    # for item in urls:
+    #     print(item.url, item.depth)
 
     print(f"Number of links after cleaning: {len(urls)}")
-    print(f"Time elapsed: {time.time() - curtime}")
-
-    """
-    # Create a list of all links found
-    links = mp.Queue()
-    links.put(url)
-    start_scraping(links, domain, maxdepth)
-    """
+    # print(f"Time elapsed: {time.time() - curtime}")
 
 
 if __name__ == "__main__":
