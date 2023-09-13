@@ -40,7 +40,7 @@ def get_args():
 def scrape_link(link, lst):
     foo = [_ for _ in parse(requests.get(link.url), link.depth)]
     for _ in foo:
-        # print(_)
+        #print(_)
         lst.append(_)
 
 
@@ -92,7 +92,6 @@ def main():
                     ),
                 )
                 threads.append(t)
-                time.sleep(0.02)
                 t.start()
                 if curdepth == 0:
                     time.sleep(2)
@@ -108,6 +107,11 @@ def main():
     print(f"Number of links after cleaning: {len(urls)}")
     # print(f"Time elapsed: {time.time() - curtime}")
 
+    with open("links.txt", "w") as f:
+        for item in urls:
+            f.write(f"{item.url}\n")
+
+    time.sleep(10)
 
 if __name__ == "__main__":
     main()
