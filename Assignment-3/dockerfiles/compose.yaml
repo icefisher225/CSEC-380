@@ -1,0 +1,53 @@
+version: '3'
+# Ryan Cheevers-Brown
+# CSEC 380 w/Olson - Assignment 3
+# Mod Security Port 8080
+# HTTPS on 443
+
+services:
+  dvwa1:
+    image: vulnerables/web-dvwa
+    container_name: dvwa1
+    environment:
+      - MYSQL_USER=dvwa
+      - MYSQL_PASSWORD=Braintree!
+  
+  dvwa2:
+    image: vulnerables/web-dvwa
+    container_name: dvwa2
+    environment:
+      - MYSQL_USER=dvwa
+      - MYSQL_PASSWORD=Braintree!
+  
+  mod_security:
+    image: owasp/modsecurity-crs:nginx
+    container_name: modsecurity
+    depends_on:
+      - dvwa1
+    ports: 
+      - "8080:80"
+    environment:
+      - NGINX_PROXY_HOST=dvwa1
+      - NGINX_PROXY_PORT=80
+      - NGINX_PROXY_SCHEME=http
+      - NGINX_LISTEN_POWER=80
+      - BACKEND=http://dvwa:80
+    links:
+      - dvwa1
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    depends_on: 
+      - dvwa1
+      - dvwa2
+    links:
+      - dvwa1
+      - dvwa2
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./certs/default.pem:/etc/nginx/cert/default.pem
+      - ./certs/default.key:/etc/nginx/cert/default.key
+    ports: 
+      - "443:443"
+

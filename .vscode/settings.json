@@ -2,5 +2,9 @@
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter"
     },
-    "python.formatting.provider": "none"
+    "python.formatting.provider": "none",
+    "yaml.schemas": {
+        "https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/ansible.json#/$defs/playbook": "file:///Users/rfcb/Library/Mobile%20Documents/com~apple~CloudDocs/Documents/RIT/S7%20RIT/CSEC%20380/Assignment-3/deploy.yml"
+    },
+    "ansible.python.interpreterPath": "/usr/local/bin/python3"
 }
