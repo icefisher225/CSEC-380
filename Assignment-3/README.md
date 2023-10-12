@@ -31,7 +31,7 @@ This project sets up a Web App environment with two instances of the Damn Vulner
 
 1. Clone this repository or download the project files.
 
-2. Navigate to the project directory in your terminal.
+2. Navigate to the project directory (./dockerfiles) in your terminal.
 
 3. To start the services:
 
@@ -71,5 +71,8 @@ This project sets up a Web App environment with two instances of the Damn Vulner
 
 This document was generated with the help of ChatGPT. 
 
-**Important**: Do not use the certificates saved in this repository for anything other than local testing. The certificates have been published in GitHub and therefore are not recommended for secure use. You can generate new certificates with 
+**Important**: Do not use the certificates saved in this repository for anything other than local testing. The certificates have been published in GitHub and therefore are not recommended for secure use. You can generate new certificates with: 
+
 ```openssl req -nodes -x509 -newkey rsa:4086 -keyout dockerfiles/certs/default.key -out dockerfiles/certs/default.pem -sha256 -days 365```
+
+This command should be run from the root `Assignment-3` folder. 
