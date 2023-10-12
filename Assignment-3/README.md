@@ -30,18 +30,22 @@ This project sets up a Web App environment with two instances of the Damn Vulner
 ### Deployment Instructions
 
 1. Clone this repository or download the project files.
+
 2. Navigate to the project directory in your terminal.
-3. For most operating systems, run the following command to start the services:
 
-```bash
-docker-compose up
-```
+3. To start the services:
 
-For RHEL, use:
+    - For most operating systems:
 
-```bash
-docker compose up
-```
+    ```bash
+    docker-compose up
+    ```
+
+    - For RHEL, use:
+
+    ```bash
+    docker compose up
+    ```
 
 4. Once the services are up:
    - Access the load-balanced DVWA application by visiting `https://localhost` in your browser.
@@ -55,7 +59,7 @@ docker compose up
      docker-compose down
      ```
 
-   - For RHEL:
+   - For RHEL, use:
 
      ```bash
      docker compose down
