@@ -16,7 +16,7 @@ services:
       - 80:80
     
   spip:
-    image: ipeos/spip:4.1
+    image: ipeos/spip:4.1.7
     container_name: spip
     ports: 
       - 8080:8000
