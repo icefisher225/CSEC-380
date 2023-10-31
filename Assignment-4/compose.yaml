@@ -1,0 +1,11 @@
+version: '1'
+# Ryan Cheevers-Browen
+# Docker Compose file for bWAPP
+# CSEC 380 w/Olson - Assignment 4
+
+services:
+  bwapp:
+    image: raesene/bwapp
+    container_name: bwapp
+    ports: 
+      - 80:80
