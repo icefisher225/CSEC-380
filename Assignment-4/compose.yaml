@@ -1,7 +1,12 @@
-version: '1'
+version: '3'
 # Ryan Cheevers-Browen
 # Docker Compose file for bWAPP
 # CSEC 380 w/Olson - Assignment 4
+# bWAPP: port 80
+# SPIP: port 8000
+# mysql: no outside access
+# adminer: port 8080
+
 
 services:
   bwapp:
@@ -9,3 +14,34 @@ services:
     container_name: bwapp
     ports: 
       - 80:80
+    
+  spip:
+    image: ipeos/spip:4.1
+    container_name: spip
+    ports: 
+      - 8080:8000
+    environment:
+      SPIP_DB_HOST: mysql
+      SPIP_DB_LOGIN: spip
+      SPIP_DB_PASS: braintree
+      SPIP_DB_NAME: spip
+      SPIP_ADMIN_NAME: admin
+      SPIP_ADMIN_LOGIN: admin
+      SPIP_ADMIN_EMAIL: admin@spip.rfcb.cloud
+      SPIP_ADMIN_PASS: Braintree!
+      SPIP_SITE_ADDRESS: http://localhost
+
+  db:
+    image: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: Braintree!
+      MYSQL_DATABASE: spip
+      MYSQL_USER: spip
+      MYSQL_PASSWORD: braintree
+
+  adminer:
+    image: adminer
+    restart: always
+    ports: 
+      - 8080:8080
