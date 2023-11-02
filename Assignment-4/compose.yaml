@@ -14,12 +14,14 @@ services:
     container_name: bwapp
     ports: 
       - 80:80
+    dns:
+      - 10.0.1.10
     
   spip:
     image: ipeos/spip:4.1.7
     container_name: spip
     ports: 
-      - 8080:8000
+      - 8000:8080
     environment:
       SPIP_DB_HOST: mysql
       SPIP_DB_LOGIN: spip
@@ -33,6 +35,7 @@ services:
 
   db:
     image: mysql
+    container_name: mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: Braintree!
