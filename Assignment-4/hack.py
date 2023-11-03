@@ -71,4 +71,4 @@ if r.status_code != 200:
 content = r.content.decode('utf-8', errors='replace')
 s = re.search("select '(.*?)\n'", content, re.DOTALL)
 if s != None:
-    print(s.group(1))
+    print(f"user is: {s.group(1)}")

@@ -184,4 +184,54 @@ This can be weaponized by injecting a payload like:
 
 Which would open up a reverse shell to my host, assuming I had configured it on my host ahead of time. This would give me full OS-level command injection via a reverse shell instead of just through PHP/web requests. 
 
-## 
+## phpMyAdmin 4.8.1 - Remote Code Execution
+
+This web appliation is a PHP webapp that runs on Apache2 and Ubuntu Linux to manage a MySQL database. I deployed it first on Ubuntu Linux in a virtual machine, and then moved it to a Docker container for ease of exploit testing. 
+
+I have code saved elsewhere in this repository that duplicates the attack as shown on Exploit DB. Due to python version upgrades and syntax changes, the code required some modification in order to work properly with Python 3.10.6. 
+
+The vulnerability exploited here is a remote code execution vulnerability. Once authenticated to theweb application, it allows the attacker to drop a payload in a GET parameter where it is saved to disk. The attacker then makes another request to execute the payload and get the result which is displayed in the terminal. I have the current payload as `'whoami'`, but this could easily be a `netcat` command to start a reverse shell on the host. 
+
+![image](./images/exploit_whoami.png)
+
+The attack requires four HTTP requests, a valid username and password, and a session cookie to keep everything tracked. 
+
+The attack starts by loading the login page for the web app. 
+
+![image](./images/exploit_url.png)
+
+Next, the attacker gets the session cookie generated from this GET request:
+
+![image](./images/exploit_cookie.png)
+
+This cookie is used to make sure that all the following HTTP requests go into the same session. This is important as the attack requires valid credentials and logging in via basic HTML authentication. 
+
+![image](./images/exploit_login.png)
+
+Next, the payload is encoded and sent via POST request with the session cookie to the vulnerable web page, `import.php`. I'm sending the `whoami` command. The expected result is that I am `www-data`. 
+
+This is a pretty normal exploitation of an unprotected `SQL` field. This can be identified by the payload containing `SELECT <stuff>;` which is proper `SQL` syntax. The `<?php system() ?>` function executes a command through the PHP engine directly on the OS shell. The `"{}"` simplifies to `"whoami"` once it passes through Python's .format() command. This is what drops the payload in the correct location on the server.  
+
+![image](./images/exploit_payload.png)
+
+The attacker makes sure to get the `phpMyAdmin` session ID and send that back to the server in a directory traversal that will get the result back from the server. 
+
+The `%253f` appears to be a nonstandard encoded `?` character. The attack is doing a directory traversal to `/var/lib/php/sessions/sess_<session_cookie>` where the session cookie is being added by the Python format string command. 
+
+![image](./images/exploit_target.png)
+
+This is the vulnerable code in the web page:
+
+![image](./images/vuln_code.png)
+
+The programmer appears to be attempting to do some sort of string validation with the `'([^a-zA-z0-9_])\'` regular expression, but this does not work as I can pass in a `'` character to terminate the SQL query and pass PHP code directly in. 
+
+This code loads the `$sql_query` variable with the value `SELECT '<?php system("whoami") ?>';`. This value is then passed down through code to here: 
+
+![image](./images/vuln_db_call.png)
+
+The programmer mentions refactoring this, and a few lines farther down does check to make sure the user is not attempting to drop a database. 
+
+This executes the command `SELECT` statement on the database which has no effect, and it passes back `<?php system("whoami")?>` in the `$analyzed_sql_results` value. This is now executable PHP code, no longer wrapped in SQL. Perhaps this is some sort of Database reflection attack?
+
+Then, when the next page loads, that code is executed on the server and the result put in the location accessed by the directory traversal as seen above. 
