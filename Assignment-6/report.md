@@ -272,27 +272,153 @@ if( ( $pass_new == $pass_conf ) && ( $data->rowCount() == 1 ) ) {
 }
 ```
 
-## BREAK BREAK BREAK BREAK
+This should be a very effective CSRF, XSS, and SQL injection mitigation. 
 
+There are no additional mitigations I would recommend, this appears to be a very complete mitigation strategy. 
 
-
-
-
-
-Adding this line between the `generateSessionToken()` and `header` should improve the CSRF mitigation. 
+BWApp's `clickjacking.php` appears to be vulnerable to CSRF as well. It includes protection against embedding, but not CSRF. The page uses the following code: 
 
 ```php
+$tix_qty = abs( $_REQUEST[ 'ticket_quantity' ]);
+$total_amt = $tix_qty * $ticket_price;
+
+echo "<p> You ordered <b>" . $tix_qty . "</b> movie tickets. Total amount charged automatically: <b>" . $total_amt . " USD</b>.</p>";
+```
+
+Tricking a user into clicking a link structured like `bwapp.com/clickjacking.php?ticket_quantity=100` would buy 100 tickets without any user interaction. This could be protected against by adding code: 
+
+```php
+checkToken( $_REQUEST[ 'user_token' ], $_SESSION[ 'session_token' ], 'index.php' );
+```
+
+That code would go above the line beginning with `$tix_qty`. This code would go near the bottom of every page: 
+
+```php
+generateSessionToken();
 session_set_cookie_params( [ 'samesite' => 'Strict' ]);
 ```
 
+That should make this page relatively invulnerable to CSRF, at least at the level we learned about in this class.
+
 ## File Inclusion (DVWA) - Analysis and Mitigation
 
+The `low` setting on DVWA contains the following code: 
 
-## Questions
+```php
+$file = $_GET[ 'page' ];
+```
 
-1. DVWA root cause?
-2. medium incomplete mitigation?
-3. high incomplete mitigation?
-4. Impossible complete mitigation?
-5. Additional mitigations for impossible?
-6. Find a BWApp script that could be mitigated by the 'impossible' DVWA mitigation and apply it. 
+This is vulnerable to file inclusion beacuse there is no input validation or sanitization. An attacker can place quite literally *anything* they want in that field and have it included on the calling web page when it reloads. 
+
+The `medium` difficulty immproves upon this with a bit of input validation. It contains the same first line as above, but has a bit of input sanitization:
+
+```php
+$file = str_replace( array( "http://", "https://" ), "", $file );
+$file = str_replace( array( "../", "..\\" ), "", $file );
+```
+
+These two lines should prevent an easy directory traversal or remote file inclusion by removing parent directory pathing and `http`/`https`. 
+
+DVWA's `hard` includes further sanitization: 
+
+```php
+$file = $_GET[ 'page' ];
+if( fnmatch( "file*", $file ) && ( $file != "include.php" ) {
+    echo "ERROR";
+    exit;
+} # Else, file is included. 
+```
+
+This is much stricter input validation. However, it uses the PHP function `fnmatch` which checks if the string matches a shell pattern. Here, it's just checking if the string starts with the string `'file'`. This is definitely exploitable. 
+
+Impossible mode specifies the exact names of the files we want to include: 
+
+```php
+$file = $_GET[ 'page' ];
+if( $file != "include.php" && $file != "file1.php" && $file != "file2.php" && $file != "file3.php" ) {
+    echo "ERROR";
+    exit;
+} # Else, include the file. 
+```
+
+This specifies the exact files that can be included, leaving no room for interpretation. However, this means that users can't upload custom files. It limits the functionality of the site. 
+
+I don't think I'd improve the mitigations, as this limits the files that can be included with effectively 100% certainty.
+
+BWAPP's `rlfi.php` looks to be vulnerable in a similar way: 
+
+```php
+if( isset( $_GET[ 'language' ])){
+    include( $language );
+}
+```
+
+The mitigation from `impossible` mode on DVWA could be implemented as such: 
+
+```php
+$file = $_GET[ 'language' ];
+$acceptable_files = array( "file1.php", 
+"file2.png", "file3.html", "file4.md" );
+if( in_array( $file, $acceptable_files ) ){
+    include( $file );
+} # Else: file not acceptable and not included
+```
+
+This solution limits the functionality of the site, but should completely prohibit any file inclusion that is not intended by the author of the site. 
+
+## Research - Insecure CAPTCHA
+
+The insecure CAPTCHA vulnerability appears in the DVWA's `low` difficulty. It appears that there is no validation to check if the user actually passed the captcha. Sending a `POST` request with the `step` parameter set to `2` should bypass the captcha entirely and allow a password change. If the `step` parameter is set to `1`, like it should be the first time the page loads, the user will have to do a captcha. 
+
+On `medium` difficulty, there is some PHP code added to check if the user passed the captcha, but it can still be bypassed by sending in a `passed_captcha` parameter set to `true`. 
+
+```php
+# Check if the POST parameter 'passed_captcha' equals 'true'
+if( !$_POST[ 'passed_captcha' ] ) {
+    $html .= "You did not pass the captcha";
+    return;
+}
+```
+
+This is not a proper way of validating a CAPTCHA as an attacker can easily POST the parameter `passed_captcha` without passing the CAPTCHA. 
+
+`Hard` difficulty adds a slightly more difficult value to find: 
+
+```php
+$resp || (
+    $_POST[ 'g-recaptcha-response' ] == 'hidd3n_valu3' && $_SERVER[ 'HTTP_USER_AGENT' ] == 'reCAPTCHA'
+)
+```
+
+When you send the POST request, you would have to set the parameter `g-recaptcha-response` to `hidd3n-valu3`, but this is not a dynamic value and therefore does not require actualy completing the captcha to validate. 
+
+`Impossible` mode adds a proper captcha that checks against the answer, not a fixed string: 
+
+```php
+$resp = recaptcha_check_answer(
+    $_DVWA[ 'recaptcha-private-key' ],
+    $_POST[ 'g-recaptcha-response' ]
+);
+
+if( !$resp ){
+    #Do the change password proceedure
+    change_password()
+} else {
+    echo "nope lol, wrong captcha";
+    exit;
+}
+```
+
+This page also happens to have proper CSRF checking and parameterized prepared SQL queries, making it pretty invulnerable to common web app attacks. I wouldn't change a thing - this web page looks very secure. 
+
+Finally, BWApp does incorporate a CAPTCHA on the `ba_captcha_bypass.php` page. However, the actual CAPTCHA generation is on the `captcha.php` page, which gets its random characters from the `functions_external.php` page. 
+
+None of this appears to be vulnerable code. ChatGPT suggested that there may be a vulnerability within client-side cookie manipulation, but I don't see where. The code looks well protected from a CAPTCHA bypass. 
+
+The preconditions you should look for are any of:
+1. CAPTCHAs that are not randomly generated
+2. CAPTCHA checks that only check to see if a static value is set, not a randomly generated one
+3. Pages that have a CAPTCHA but don't ever check if it was validated
+4. Weak CAPTCHAs - if the length is too short or does not contain enough different characters (ex. 'aaaaaa' is a weak captcha)
+
+If any of these situations exist, a CAPTCHA bypass likely exists. 
