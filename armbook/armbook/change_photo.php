@@ -104,4 +104,5 @@ if($has_session){
 			die("Error - Issue preparing statement: " . mysqli_error($mysqli));
 		}
 	}
-?>	
+}
+?>
