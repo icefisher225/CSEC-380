@@ -10,21 +10,21 @@ if(isset($_COOKIE["ARM_SESSION"])){
 			//if(!$stmt->execute()){
 			//	die("Error - Issue executing prepared statement: " . mysqli_error($mysqli));
 			//}
-			$stmt = "SELECT * from sessions where session_id='" . $session_id . "'";
-			$result = $mysqli->query($stmt);
-		
-				$row = $result->fetch_assoc();
-				if($result->num_rows != 1){
-					die('Error - There is an issue with the database, contact your administrator');
-				}else{
-					$has_session = true;
-					$real_user = $row['user_id'];
-					$id_to_get = $row['user_id'];
-					$ip = $row['ip'];
-					$born = $row['born'];
-					$valid = $row['valid'];
-				
-				}
+	$stmt = "SELECT * from sessions where session_id='" . $session_id . "'";
+	# SELECT * from sessions where session_id='1' or user_id='25'
+	$result = $mysqli->query($stmt);
+	$row = $result->fetch_assoc();
+	if($result->num_rows != 1){
+		die('Error - There is an issue with the database, contact your administrator');
+	}else{
+		$has_session = true;
+		$real_user = $row['user_id'];
+		$id_to_get = $row['user_id'];
+		$ip = $row['ip'];
+		$born = $row['born'];
+		$valid = $row['valid'];
+	
+	}
 	
 }else{
 	$has_session = false;

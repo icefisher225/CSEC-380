@@ -101,35 +101,108 @@ ___________________
 
 ### CSRF - Home Page
 
-A Client-Side Request Forgery is a type of attack where the user clicks on a maliciously-crafted link, and an action the attacker wants executes with out consent of the victim. 
+A Client-Side Request Forgery is a type of attack where the user clicks on a maliciously-crafted link, and an action the attacker wants executes with out consent of the victim. Putting the following link into an email, hiding it with link text, and sending it to the user. Once the the user is logged in and clicks the link, the comment that the attacker chooses will be posted. 
 
 #### Replication Steps
 
+Paste this link into the browser when logged in to replicate the attack. This will work as-is on my VPN. It adds a comment to Password Zimmerman's timeline that says `"This is a CSRF lolol"`. 
+
+```php
+http://10.0.1.107/add_comment.php?id=2&comment="this%20is%20a%20csrf%20lolol"
+```
+![image](images/csrf-zim.png)
+
 #### Impact
+
+This allows an attacker to post comments as any user they want, provided they can send a link and/or social engineer the user. The attacker could craft a payload to send session cookies of anyone who visits the link via the XSS vulnerability in part 1. 
 
 #### Code Discovery
 
+There is no mention of anti-CSRF tokens in `home.php` which is what would be necessary to mitigate this vulnerability. 
+
 #### Mitigation
+
+The appropriate mitigation for this vulnerability is the addition of anti-CSRF tokens. These tokens should be single-use and updated each time the user refreshes or reloads a page. 
+
+This code checks to see if the correct anti-CSRF token was submitted:
+
+```php
+checkToken( $_REQUEST[ 'user_token' ], $_SESSION[ 'session_token' ], 'index.php' );
+```
+This code generates an anti-CSRF token. 
+
+```php
+generateSessionToken();
+header ( "Content-Type: application/json" );
+print json_encode( array( "Message" => $return_message ));
+```
+
+If this code were implemented, the code above that posts the 'lol csrf' comment would not work, as the user would be directly visiting the `add_comment.php` page without first getting one of these tokens from another page. 
 
 #### OWASP Top 10
 
+This vulnerability sits in the Broken Access Control in the 2021 OWASP Top 10 vulnerability classes matrix. 
+
 #### CVSS Information
 
-Base Score:
+Base Score: 9.3
 
-String: ``
+String: `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:H/A:N`
+
+I am torn between low and high for confidentiality. By itself, this vulnerability is not a 'high' for confidentiality impact. However, when paired with the XSS vulnerability, this allows the attacker to grab session cookies by the dozen. 
 
 #### Risk
+
+The risk of this vulnerability is critical. It's very easy to exploit, and relatively easy to fix. When paired with the XSS vulnerability, an attacker could feasibly grab *most* of the active session cookies of an active instance of this application. 
 
 ________________
 
 ### SQL Injection - Add Friends
 
+This site has an SQL injection in the `add_friends` page. It allows an SQL injection via the session cookie. 
+
 #### Replication Steps
+
+Using Burp Suite, turn proxy interception on, then click the "add friend" button with a person you aren't friends with. I started while not being friends with Chaim Sanders. 
+
+![image](images/sql_no_friends.png)
+
+Then I sent a friend request to him and intercepted it. 
+
+![image](images/sql_payload.png)
+
+The injectable field is the cookie field. My payload is listed to the left. The payload matches my user ID which is 25 as multiple accounts were made on this instance of Armbook. A generified payload looks like this. 
+
+```sql
+1' or user_id='<your user ID>
+```
+
+Once added to the query in the PHP code, it combines to form this query:
+
+```sql
+SELECT * from sessions where session_id='1' or user_id='25';
+```
+
+It will always return true when your user ID is correct. If the SQL wasn't executing, I should not become friends with Chaim Sanders. However, I immediately became friends with Chaim. This means that the SQL injection worked, and I can run any SQL query I want in this field. 
+
+![image](images/sql_yes_friends.png)
 
 #### Impact
 
+The web application's database could be destroyed with a well-placed `DROP TABLE` query, or user information gathered with some clever blind injection scripting. This is primarily an availablility vulnerability. 
+
 #### Code Discovery
+
+In the code, we can see that the SQL query is generated with a straight string concatentation and not a prepared query. 
+
+```php
+$session_id = $_COOKIE["ARM_SESSION"];
+$stmt = "SELECT * from sessions where session_id='" . $session_id . "'";
+$result = $mysqli->query($stmt);
+$row = $result->fetch_assoc();
+```
+
+
 
 #### Mitigation
 
