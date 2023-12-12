@@ -202,16 +202,48 @@ $result = $mysqli->query($stmt);
 $row = $result->fetch_assoc();
 ```
 
-
+This makes it very likely to be injectable unless a lot of other sanitization is happening before the variables are concatenated. That's not happening in this code. 
 
 #### Mitigation
 
+This can be mitigated with a prepared query. 
+
+```php
+$stmt = $mysqli->prepare("SELECT * from sessions where session_id=?")
+$stmt->bind_param("s", $session_id)
+$stmt->execute()
+```
+
 #### OWASP Top 10
+
+This vulnerability is part of A03: Injection in the 2021 OWASP Top 10 vulnerability classes matrix. 
 
 #### CVSS Information
 
-Base Score:
+Base Score: 8.5
 
-String: ``
+String: `CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H`
 
 #### Risk
+
+The primary risk here is to availability. Injecting a `DROP DATABASE` would cause the immediate destruction of most of the web application. The injection could also be used to get data on users or other confidential information, though that would take a bit more concerted effort and potentially some blind injection scripting. 
+
+## Automated Web Scanning 
+
+### Which OWASP ZAP finding is the most significant and why?
+
+The Path traversal finding is the most significant. It's not an actual path traversal. 
+
+ZAP Changes the "ARM_SESSION" parameter to "login.php" from the actual session token and the login still succeeded. This likely means that the session token is settable by the user. I tested this with all "0" characters in this parameter and even that worked! Then the string of 0's became my session token. 
+
+This is significant because an attacker could use this vulnerability to force session tokens and gain access to user accounts. 
+
+### Are any of the high-priority findings likely to be false positives? If so, why?
+
+The path traversal finding is technically a false positive. No path traversal was found. However, that alert does indicate another vulnerability which is explained above. 
+
+Additionally, the Content Security Policy header alert is a likely false positive. This triggered on the `robots.txt` page, not an actual page of the web site which makes it much more likely to be a false positive. 
+
+### Did it find any of the vulnerabilities in section 2?
+
+ZAP found the anti-CSRF vulnerability. 
